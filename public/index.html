@@ -22,6 +22,14 @@
     <main class="container">
         <!-- 首页 / 文档列表 -->
         <section id="home-section">
+            <div class="category-tabs">
+                <button class="category-tab active" data-category="all" onclick="filterByCategory('all')">全部</button>
+                <button class="category-tab" data-category="系统类" onclick="filterByCategory('系统类')">系统类</button>
+                <button class="category-tab" data-category="脚本类" onclick="filterByCategory('脚本类')">脚本类</button>
+                <button class="category-tab" data-category="IP类" onclick="filterByCategory('IP类')">IP类</button>
+                <button class="category-tab" data-category="技术类" onclick="filterByCategory('技术类')">技术类</button>
+                <button class="category-tab" data-category="其他" onclick="filterByCategory('其他')">其他</button>
+            </div>
             <div class="doc-list">
                 <h2>文档列表</h2>
                 <div id="docs-container" class="docs-grid"></div>
@@ -87,15 +95,33 @@
                         </div>
                         <div class="form-group">
                             <label>分类</label>
-                            <input type="text" id="doc-category" placeholder="例如: 指南、教程">
+                            <select id="doc-category">
+                                <option value="系统类">系统类</option>
+                                <option value="脚本类">脚本类</option>
+                                <option value="IP类">IP类</option>
+                                <option value="技术类">技术类</option>
+                                <option value="其他">其他</option>
+                            </select>
                         </div>
                         <div class="form-group">
-                            <label>内容 (Markdown)</label>
-                            <textarea id="doc-content" rows="15" placeholder="使用 Markdown 格式编写..."></textarea>
+                            <label>内容 (Markdown，支持图片)</label>
+                            <div class="editor-toolbar">
+                                <button type="button" onclick="insertImage()" title="插入图片">🖼️ 图片</button>
+                                <span class="toolbar-hint">点击"图片"按钮上传，或直接粘贴图片</span>
+                            </div>
+                            <textarea id="doc-content" rows="15" placeholder="使用 Markdown 格式编写...
+
+支持的功能：
+- 标题：# H1, ## H2, ### H3
+- 列表：- 项目
+- 代码：```js 或 `code`
+- 链接：[文字](URL)
+- 图片：![说明](图片URL)
+- 上传图片后会自动生成链接"></textarea>
                         </div>
                         <div class="form-actions">
                             <button type="button" class="btn-secondary" onclick="hideDocEditor()">取消</button>
-                            <button type="submit" class="btn-primary">保存</button>
+                            <button type="submit" class="btn-primary">保存并发布</button>
                         </div>
                     </form>
                 </div>

@@ -14,6 +14,14 @@ const API = {
         return res.json();
     },
     
+    async postForm(url, formData) {
+        const res = await fetch(url, {
+            method: 'POST',
+            body: formData
+        });
+        return res.json();
+    },
+    
     async put(url, data) {
         const res = await fetch(url, {
             method: 'PUT',
@@ -32,6 +40,7 @@ const API = {
 // 页面状态
 let currentUser = null;
 let currentDocs = [];
+let currentCategory = 'all';
 
 // 初始化
 async function init() {
@@ -76,19 +85,43 @@ async function showHome() {
     }
 }
 
+// 按分类筛选
+function filterByCategory(category) {
+    currentCategory = category;
+    
+    // 更新标签样式
+    document.querySelectorAll('.category-tab').forEach(tab => {
+        tab.classList.remove('active');
+        if (tab.dataset.category === category) {
+            tab.classList.add('active');
+        }
+    });
+    
+    renderDocsList();
+}
+
 // 渲染文档列表
 function renderDocsList() {
     const container = document.getElementById('docs-container');
+    let filteredDocs = currentDocs;
     
-    if (currentDocs.length === 0) {
-        container.innerHTML = '<p>暂无文档</p>';
+    // 按分类筛选
+    if (currentCategory !== 'all') {
+        filteredDocs = currentDocs.filter(d => d.category === currentCategory);
+    }
+    
+    if (filteredDocs.length === 0) {
+        container.innerHTML = '<p class="no-data">暂无文档</p>';
         return;
     }
     
-    container.innerHTML = currentDocs.map(doc => `
+    // 按更新时间排序
+    filteredDocs.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    
+    container.innerHTML = filteredDocs.map(doc => `
         <div class="doc-card" onclick="viewDoc(${doc.id})">
             <h3>${escapeHtml(doc.title)}</h3>
-            <span class="category">${escapeHtml(doc.category)}</span>
+            <span class="category-tag category-${doc.category}">${escapeHtml(doc.category)}</span>
             <p class="date">${formatDate(doc.createdAt)}</p>
         </div>
     `).join('');
@@ -168,15 +201,18 @@ async function loadAdminDocs() {
 function renderAdminDocs() {
     const tbody = document.getElementById('admin-docs-tbody');
     
-    if (currentDocs.length === 0) {
+    // 按更新时间排序
+    const sortedDocs = [...currentDocs].sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+    
+    if (sortedDocs.length === 0) {
         tbody.innerHTML = '<tr><td colspan="4" style="text-align:center">暂无文档</td></tr>';
         return;
     }
     
-    tbody.innerHTML = currentDocs.map(doc => `
+    tbody.innerHTML = sortedDocs.map(doc => `
         <tr>
             <td>${escapeHtml(doc.title)}</td>
-            <td>${escapeHtml(doc.category)}</td>
+            <td><span class="category-tag category-${doc.category}">${escapeHtml(doc.category)}</span></td>
             <td>${formatDate(doc.updatedAt || doc.createdAt)}</td>
             <td class="actions">
                 <button class="btn-edit" onclick="editDoc(${doc.id})">编辑</button>
@@ -199,13 +235,13 @@ function showDocEditor(doc = null) {
         title.textContent = '编辑文档';
         idInput.value = doc.id;
         titleInput.value = doc.title;
-        categoryInput.value = doc.category;
+        categoryInput.value = doc.category || '技术类';
         contentInput.value = doc.content;
     } else {
         title.textContent = '新建文档';
         idInput.value = '';
         titleInput.value = '';
-        categoryInput.value = '';
+        categoryInput.value = '技术类';
         contentInput.value = '';
     }
     
@@ -216,6 +252,77 @@ function showDocEditor(doc = null) {
 function hideDocEditor() {
     document.getElementById('doc-editor').style.display = 'none';
 }
+
+// 插入图片
+async function insertImage() {
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.accept = 'image/*';
+    
+    input.onchange = async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        
+        const formData = new FormData();
+        formData.append('image', file);
+        
+        try {
+            const data = await API.postForm('/api/admin/upload', formData);
+            if (data.success) {
+                // 插入图片 Markdown
+                const textarea = document.getElementById('doc-content');
+                const imgMarkdown = `![${file.name}](${data.url})`;
+                insertAtCursor(textarea, '\n' + imgMarkdown + '\n');
+            } else {
+                alert('上传失败: ' + (data.error || '未知错误'));
+            }
+        } catch (err) {
+            alert('上传失败，请重试');
+        }
+    };
+    
+    input.click();
+}
+
+// 在光标位置插入文本
+function insertAtCursor(textarea, text) {
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const value = textarea.value;
+    textarea.value = value.substring(0, start) + text + value.substring(end);
+    textarea.selectionStart = textarea.selectionEnd = start + text.length;
+    textarea.focus();
+}
+
+// 粘贴图片
+document.addEventListener('DOMContentLoaded', () => {
+    const textarea = document.getElementById('doc-content');
+    if (!textarea) return;
+    
+    textarea.addEventListener('paste', async (e) => {
+        const items = e.clipboardData.items;
+        for (let item of items) {
+            if (item.type.indexOf('image') !== -1) {
+                e.preventDefault();
+                const file = item.getAsFile();
+                
+                const formData = new FormData();
+                formData.append('image', file);
+                
+                try {
+                    const data = await API.postForm('/api/admin/upload', formData);
+                    if (data.success) {
+                        const imgMarkdown = `![image](${data.url})`;
+                        insertAtCursor(textarea, '\n' + imgMarkdown + '\n');
+                    }
+                } catch (err) {
+                    console.error('粘贴图片上传失败', err);
+                }
+                break;
+            }
+        }
+    });
+});
 
 // 编辑文档
 async function editDoc(id) {
@@ -238,9 +345,11 @@ async function saveDoc(e) {
         if (id) {
             // 更新
             await API.put(`/api/admin/docs/${id}`, { title, category, content });
+            alert('文档已更新，将自动提交到 GitHub');
         } else {
             // 创建
             await API.post('/api/admin/docs', { title, category, content });
+            alert('文档已创建，将自动提交到 GitHub');
         }
         
         hideDocEditor();
@@ -257,6 +366,7 @@ async function deleteDoc(id) {
     try {
         await API.delete(`/api/admin/docs/${id}`);
         await loadAdminDocs();
+        alert('文档已删除，将自动从 GitHub 移除');
     } catch (e) {
         alert('删除失败');
     }
@@ -270,7 +380,7 @@ function hideAllSections() {
     document.getElementById('admin-section').style.display = 'none';
 }
 
-// 简单 Markdown 渲染
+// 简单 Markdown 渲染（增强图片支持）
 function renderMarkdown(text) {
     if (!text) return '';
     
@@ -291,7 +401,10 @@ function renderMarkdown(text) {
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
     
     // 链接
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>');
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+    
+    // 图片（增强：支持本地图片）
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image" onclick="window.open(this.src)">');
     
     // 引用
     html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
@@ -299,6 +412,9 @@ function renderMarkdown(text) {
     // 列表
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
     html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
+    
+    // 水平线
+    html = html.replace(/^---$/gm, '<hr>');
     
     // 换行
     html = html.replace(/\n\n/g, '</p><p>');
@@ -314,6 +430,7 @@ function renderMarkdown(text) {
     html = html.replace(/(<\/ul>)<\/p>/g, '$1');
     html = html.replace(/<p>(<blockquote>)/g, '$1');
     html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
+    html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
     
     return html;
 }
