@@ -384,43 +384,53 @@ function hideAllSections() {
 function renderMarkdown(text) {
     if (!text) return '';
     
-    let html = escapeHtml(text);
+    let html = text;
     
-    // 标题
+    // 1. 先处理图片（使用临时占位符避免转义问题）
+    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '___IMG_START___$2___IMG_END___$1___IMG_END___');
+    
+    // 2. 处理链接
+    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '___LINK_START___$2___LINK_END___$1___LINK_END___');
+    
+    // 3. 标题
     html = html.replace(/^### (.+)$/gm, '<h3>$1</h3>');
     html = html.replace(/^## (.+)$/gm, '<h2>$1</h2>');
     html = html.replace(/^# (.+)$/gm, '<h1>$1</h1>');
     
-    // 粗体和斜体
+    // 4. 粗体和斜体
     html = html.replace(/\*\*\*(.+?)\*\*\*/g, '<strong><em>$1</em></strong>');
     html = html.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
     html = html.replace(/\*(.+?)\*/g, '<em>$1</em>');
     
-    // 代码块
+    // 5. 代码块
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>');
     html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
     
-    // 链接
-    html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
-    
-    // 图片（增强：支持本地图片）
-    html = html.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="md-image" onclick="window.open(this.src)">');
-    
-    // 引用
+    // 6. 引用
     html = html.replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>');
     
-    // 列表
+    // 7. 列表
     html = html.replace(/^- (.+)$/gm, '<li>$1</li>');
     html = html.replace(/(<li>.*<\/li>)/s, '<ul>$1</ul>');
     
-    // 水平线
+    // 8. 水平线
     html = html.replace(/^---$/gm, '<hr>');
     
-    // 换行
-    html = html.replace(/\n\n/g, '</p><p>');
+    // 9. 转义剩余的 HTML 字符
+    html = escapeHtml(html);
+    
+    // 10. 还原图片
+    html = html.replace(/___IMG_START___([^_]+)___IMG_END___([^_]+)___IMG_END___/g, '<img src="$1" alt="$2" class="md-image" onclick="window.open(this.src)">');
+    
+    // 11. 还原链接
+    html = html.replace(/___LINK_START___([^_]+)___LINK_END___([^_]+)___LINK_END___/g, '<a href="$1" target="_blank">$2</a>');
+    
+    // 12. 换行处理
+    html = html.replace(/\n/g, '<br>');
+    html = html.replace(/<br><br>/g, '</p><p>');
     html = '<p>' + html + '</p>';
     
-    // 清理空段落
+    // 13. 清理
     html = html.replace(/<p><\/p>/g, '');
     html = html.replace(/<p>(<h[1-6]>)/g, '$1');
     html = html.replace(/(<\/h[1-6]>)<\/p>/g, '$1');
@@ -431,6 +441,10 @@ function renderMarkdown(text) {
     html = html.replace(/<p>(<blockquote>)/g, '$1');
     html = html.replace(/(<\/blockquote>)<\/p>/g, '$1');
     html = html.replace(/<p>(<hr>)<\/p>/g, '$1');
+    html = html.replace(/<p>(<img)/g, '<img');
+    html = html.replace(/(<br>)*<\/p>/g, '</p>');
+    html = html.replace(/<p>(<a)/g, '<a');
+    html = html.replace(/(<\/a>)<\/p>/g, '$1');
     
     return html;
 }
